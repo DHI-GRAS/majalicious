@@ -107,7 +107,6 @@ def _link_config_files(src_userconf, dst_userconf):
 
 
 def make_symlinks_forward(date, inputs_by_date, outputs_by_date, dst_work):
-
     pass
 
 
@@ -115,8 +114,8 @@ def make_symlinks_backward(date, inputs_by_date, outputs_by_date, dst_work):
     pass
 
 
-def generate_maja_commands(src_input, dst_output, startdate=None, enddate=None, num_backward=8):
-    inputs_by_date = _find_filter_granules(src_input, startdate, enddate, tile=tile, orbit=orbit)
+def generate_maja_commands(src_input, dst_output, num_backward=8, **filterkw):
+    inputs_by_date = _find_filter_granules(src_input, **filterkw)
 
     outputs_by_date = _find_outputs(dst_output)
 
@@ -125,8 +124,6 @@ def generate_maja_commands(src_input, dst_output, startdate=None, enddate=None, 
     for date, input_path in inputs_to_process.items():
         pass
 
-
-def find_generate
 
 num_backward = 8  # number of images to process in backward mode
 
@@ -145,7 +142,7 @@ startdate = None
 
 df_granules = _find_filter_granules(src_input, tile=tile, startdate=startdate)
 
-df_granules = _remove_duplicates(df_granules)
+df_granules = _remove_date_duplicates(df_granules)
 
 
 all_dates_input = df_granules['date'].values
