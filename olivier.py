@@ -1,7 +1,4 @@
-import os
 import re
-import glob
-import shutil
 from collections import OrderedDict
 
 
@@ -23,11 +20,36 @@ def _maja_date_from_safe_name(safe_name):
         # old format
         datestr = safe_name.split('_')[5]
     if dateex.match(datestr) is None:
-        raise ValueError(f'Unable to get date from {path_safe}')
+        raise ValueError(f'Unable to get date from {safe_name}')
     return datestr
 
 
-def _find_filter_granules(src_input, startdate, enddate, tile, orbit):
+def _date_from_maja_output(name):
+    try:
+        return re.search(r'\d{8}T\d{6}', name).group(0)
+    except AttributeError:
+        raise ValueError(f'Unable to get date string from {name}.')
+
+
+def _remove_duplicate_date_entries(date_mapping):
+    """Remove duplicates in a mapping of date-time strings IN-PLACE, retaining most recent
+
+    Parameters
+    ----------
+    date_mapping : dict
+        mapping date-time string
+        of format %Y%m%dT%H%M%S
+    """
+    unique_dates = []
+    for date_and_time in sorted(list(date_mapping), reverse=True):
+        date_only = date_and_time[:8]
+        if date_only in unique_dates:
+            del date_mapping[date_and_time]
+        else:
+            unique_dates.append(date_only)
+
+
+def _find_inputs(src_input, tile):
     """
     Returns
     -------
@@ -35,178 +57,164 @@ def _find_filter_granules(src_input, startdate, enddate, tile, orbit):
         maps date to path
         L1C .SAFE products sorted by date
     """
-    all_graules = _find_granules(src_input, tile=tile)
-
+    all_granules = _find_granules(src_input, tile=tile)
     pairs = []
     for granule in all_granules:
         safe = granule.parents[1]
         if not safe.name.endswith('.SAFE'):
             raise ValueError(f'Expecting .SAFE, got {safe}')
         date = _maja_date_from_safe_name(safe.name)
-
         pairs.append((date, safe))
-
-    return OrderedDict(sorted(pairs))
-
-
-def _remove_date_duplicates(dates_paths):
-    dates_sorted = sorted(list(dates_paths))
-    for date_and_time in dates_sorted[::-1]:
-        date_only = date_and_time[:8]
+    paths_by_date = OrderedDict(sorted(pairs))
+    _remove_duplicate_date_entries(paths_by_date)
+    return paths_by_date
 
 
-def _find_outputs(dst_output):
-    """
+def _find_outputs(dst_output, tile):
+    """Find MAJA's L2A products for tile in an output directory
+
+    Parameters
+    ----------
+    dst_output : Path
+        destination directory
+    tile : str, format \d{2}{[A-Z]{4}}
+        Sentinel 2 tile name
+
+
     Returns
     -------
     OrderedDict
         maps date to path
         L2A products sorted by date
     """
-    pass
+    all_paths = _find_outputs(dst_output, tile=tile)
+    pairs = []
+    for path in all_paths:
+        date = _date_from_maja_output(path.name)
+        pairs.append((date, path))
+    paths_by_date = OrderedDict(sorted(pairs))
+    _remove_duplicate_date_entries(paths_by_date)
+    return paths_by_date
 
 
-def _get_outputs_forward(df_outputs, date, nprods=8):
-    """Finds `nprods` L2A products before `date` to be used in forward mode
+def _get_most_recent_output(date, outputs_by_date):
+    """Finds the most recent L2A product before `date` to be used in forward mode
+
+    Parameters
+    ----------
+    date : str
+        date in format %Y%m%d
+    outputs_by_date : OrderedDict
+        mapping date to path
 
     Returns
     -------
-    OrderedDict
-        columns date, path
-        L2A products used for backward processing
+    dict length 1
+        most recent item from outputs_by_date before the given date
     """
-    pass
+    most_recent_date = None
+    for output_date, output_path in outputs_by_date.items():
+        if output_date >= date:
+            break
+        if (most_recent_date is None) or (output_date > most_recent_date):
+            most_recent_date = output_date
+    if most_recent_date is None:
+        return None
+    else:
+        return {most_recent_date: outputs_by_date[most_recent_date]}
 
 
-def _get_outputs_backward(df_outputs, date, nprods=8):
-    """Finds `nprods` L2A products after `date` to be used in backward mode
+def _get_inputs_backward(date, inputs_by_date, num_inputs=8):
+    pairs = []
+    for input_date, input_path in inputs_by_date:
+        if input_date < date:
+            continue
+        if len(pairs) >= num_inputs:
+            break
+        pairs.append((input_date, input_path))
+    return OrderedDict(pairs)
 
-    Returns
-    -------
-    OrderedDict
-        columns date, path
-        L2A products used for backward processing
-    """
-    pass
 
-
-def _link_parameter_files(src_gipp, dst_work):
+def _symlink_gipp(src_gipp, dst_work):
     for src in src_gipp.glob('*'):
         dst = dst_work / src.name
         src.sym_link_to(dst)
 
 
-def _link_dem(path_dem, dst_work):
+def _symlink_dem(path_dem, dst_work):
     for src in path_dem.glob('*'):
         dst = dst_work / src.name
         src.sym_link_to(dst)
 
 
-def _link_config_files(src_userconf, dst_userconf):
-    src_userconf.sym_link_to(dst_userconf)
+def _symlink_in_dir(src_file, dst_dir):
+    dst_file = dst_dir / src_file.name
+    src_file.symlink_to(dst_file)
+    return dst_file
 
 
-def make_symlinks_forward(date, inputs_by_date, outputs_by_date, dst_work):
-    pass
+def _symlink_l2a(src_dbldir, dst_dir):
+    if not src_dbldir.suffixes == ('.DBL', '.DIR'):
+        raise ValueError(f'Expecting a .DBL.DIR file, got {src_dbldir}')
+    dbl = src_dbldir.stem
+    hdr = dbl.with_suffix('.HDR')
+    for path in [src_dbldir, dbl, hdr]:
+        if not path.exists():
+            raise RuntimeError(f'File not found: {path}')
+        _symlink_in_dir(path, dst_dir)
 
 
-def make_symlinks_backward(date, inputs_by_date, outputs_by_date, dst_work):
-    pass
-
-
-def generate_maja_commands(src_input, dst_output, num_backward=8, **filterkw):
-    inputs_by_date = _find_filter_granules(src_input, **filterkw)
-
+def generate_maja_commands(
+        src_input, src_userconf, src_dtm, src_gipp,
+        dst_work_root, dst_output, tile, maja,
+        start_date=None, num_backward=8):
+    inputs_by_date = _find_inputs(src_input, tile)
     outputs_by_date = _find_outputs(dst_output)
+    if outputs_by_date:
+        inputs_to_process = {d: path for d, path in inputs_by_date if d not in outputs_by_date}
+    else:
+        inputs_to_process = inputs_by_date
 
-    inputs_to_process = {d: path for d, path in inputs_by_date if d not in outputs_by_date}
+    if start_date is not None:
+        inputs_to_process = {d: path for d, path in inputs_to_process if d >= start_date}
+
+    minusp = dict(parents=True, exist_ok=True)
+    dst_output.mkdir(**minusp)
+    dst_work_root.mkdir(**minusp)
+
+    dst_userconf = dst_work_root / 'userconf'
+    if dst_userconf.exists():
+        dst_userconf.unlink()
+    src_userconf.symlink_to(dst_userconf)
 
     for date, input_path in inputs_to_process.items():
-        pass
 
+        dst_work = dst_work_root / f'work_{date}'
+        dst_work.mkdir(exist_ok=False)
 
-num_backward = 8  # number of images to process in backward mode
+        _symlink_dem(src_dtm, dst_work)
+        _symlink_gipp(src_gipp, dst_work)
 
-src_userconf = '/source/input/userconf'
-src_dtm = '/source/input/dtm'
-src_gipp = '/source/input/gpp'
-dst_work = '/destination/work'
-dst_output = '/destination/output'
-dst_userconf = '/destination/userconf'
+        output = _get_most_recent_output(date, outputs_by_date)
+        if output is None:
+            print(f'No recent L2A product for date {date}')
+            mode = 'L2BACKWARD'
+            inputs_backward = _get_inputs_backward(date, inputs_by_date, num_backward)
+            num_backward_found = len(inputs_backward)
+            if num_backward_found < num_backward:
+                print(
+                    f'Did not find {num_backward} input products for '
+                    f'backward processing but only {num_backward_found}.')
+            for input_path in inputs_backward.values():
+                _symlink_in_dir(input_path, dst_work)
+        else:
+            output_date, output_path = next(iter(output.items()))
+            print(f'Most recent L2A product date is {output_date}')
+            mode = 'L2NOMINAL'
+            _symlink_l2a(output_path, dst_work)
 
-maja = '/path/to/maja'
-tile = '32UNG'
-src_input = '/source/products'
+        cmd = f'{maja} -i {dst_work} -o {dst_output} -m {mode} -ucs {dst_userconf} --TileId {tile}'
+        yield cmd
 
-startdate = None
-
-df_granules = _find_filter_granules(src_input, tile=tile, startdate=startdate)
-
-df_granules = _remove_date_duplicates(df_granules)
-
-
-all_dates_input = df_granules['date'].values
-
-inputs_by_date = {}
-outputs_by_date = {}
-for d in all_dates_input:
-    # keep only the products with the most recent date
-    inputs_by_date[d] = granules_filtered[ind]
-    outputs_by_date[d] = "S2?_OPER_SSC_L2VALD_%s____%s.DBL.DIR" % (tile, d)
-
-
-# print "Most recent processed date :", previous_date
-
-# For each product
-nb_dates = len(all_dates_input)
-
-
-if not(os.path.exists(dst_work)):
-    os.makedirs(dst_work)
-
-if not(os.path.exists(dst_userconf)):
-    _link_config_files(src_userconf, dst_userconf)
-
-for i in range(nb_dates):
-    d = all_dates_input[i]
-    if d <= previous_date:
-        continue
-
-    if os.path.exists(dst_work):
-        shutil.rmtree(dst_work)
-    os.makedirs(dst_work)
-
-    if i == 0:
-        # BACKWARD MODE
-        nb_prod_backward = min(len(all_dates_input), num_backward)
-        for date_backward in all_dates_input[0:nb_prod_backward]:
-            # print "#### dates à traiter", date_backward
-            os.symlink(inputs_by_date[date_backward], dst_work / os.path.basename(inputs_by_date[date_backward]))
-        _link_parameter_files(src_gipp, dst_work)
-        _link_dem(src_dtm, dst_work)
-
-        commande = f"{maja} -i {dst_work} -o {dst_output} -m L2BACKWARD -ucs {dst_userconf} --TileId {tile}"
-        #os.system(commande)
-    else:
-        # NOMINAL MODE
-        # Search for previous L2 product
-        for previous_date in all_dates_input[0:i]:
-            nom_courant = "%s/%s" % (dst_output,
-                                     outputs_by_date[previous_date])
-            try:
-                nomL2 = glob.glob(nom_courant)[0]
-                # "Previous L2 names, per increasing date :", nomL2
-            except:
-                # print "pas de L2 pour :", nom_courant
-                pass
-        # print "previous L2 : ", nomL2
-        os.symlink(inputs_by_date[previous_date], dst_work / os.path.basename(inputs_by_date[previous_date]))
-        os.symlink(nomL2, dst_work / os.path.basename(nomL2))
-        os.symlink(nomL2.replace("DBL.DIR", "HDR"), dst_work / os.path.basename(nomL2).replace("DBL.DIR", "HDR"))
-        os.symlink(nomL2.replace("DIR", ""), dst_work / os.path.basename(nomL2).replace("DIR", ""))
-
-        _link_parameter_files(src_gipp, dst_work, tile)
-        _link_dem(src_dtm, dst_work, tile)
-
-        commande = f"{maja} -i {dst_work} -o {dst_output} -m L2NOMINAL -ucs {dst_userconf} --TileId {tile}"
-        #os.system(commande)
+        # update outputs
+        outputs_by_date = _find_outputs(dst_output)
