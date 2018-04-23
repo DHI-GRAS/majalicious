@@ -26,11 +26,11 @@ ADD maja-cots-1.0.0-rhel.7.2.x86_64-release-gcc.tar /usr/local/maja/
 RUN cd /usr/local/maja/maja-cots-1.0.0-rhel.7.2.x86_64-release-gcc && echo 'Y'|./install.sh
 RUN cd /usr/local/maja/maja-1.0.0-rhel.7.2.x86_64-release-gcc && echo 'Y'|./install.sh
 
-ADD olivier.py /usr/local/maja
+ADD majalicious.py /usr/local/maja
 
 RUN mkdir /maja-work-root
 
 ENV MAJA_BIN "/opt/maja/core/1.0/bin/maja"
 
-ENTRYPOINT ["python3.6", "/usr/local/maja/olivier.py"]
+ENTRYPOINT ["python3.6", "/usr/local/maja/majalicious.py"]
 CMD ["--help"] 
