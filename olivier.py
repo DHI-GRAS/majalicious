@@ -1,4 +1,5 @@
 import re
+import uuid
 import warnings
 from collections import OrderedDict
 
@@ -246,7 +247,8 @@ def be_a_symlink_guy(
 
     for date, input_path in inputs_to_process.items():
 
-        dst_work = dst_work_root / f'work_{date}'
+        new_uuid = str(uuid.uuid4())
+        dst_work = dst_work_root / f'work_{date}_{new_uuid}'
         dst_work.mkdir(exist_ok=False)
 
         _symlink_dir_contents(src_dtm, dst_work)
