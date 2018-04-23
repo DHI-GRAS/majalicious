@@ -282,6 +282,9 @@ def be_a_symlink_guy(
             mode = 'L2NOMINAL'
             _symlink_l2a(output_path, dst_work)
 
+        print('Work folder contents:')
+        print('\n'.join([str(p) for p in dst_work.glob('*')]))
+
         cmd = [
             str(maja),
             '-i', str(dst_work),
@@ -328,6 +331,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--src-input', type=to_path, required=True, help='dir containing L1C .SAFE')
     parser.add_argument(
+        '--dst-output', type=to_path, required=True, help='Output directory')
+    parser.add_argument(
+        '--tile', required=True, help='Tile name (e.g. 32UNG)')
+    parser.add_argument(
         '--src-userconf', default=pathlib.Path('/maja-aux/userconf'),
         type=to_path, help='userconf dir (default: /maja-aux/userconf)')
     parser.add_argument(
@@ -337,14 +344,10 @@ if __name__ == '__main__':
         '--src-dtm', default='/maja-aux/DTM/{tile}',
         type=to_path, help='DTM dir (default: /maja-aux/DTM/{tile})')
     parser.add_argument(
-        '--dst-work-root', default=pathlib.Path('/maja-out/work'),
-        type=to_path, help='Work root dir (default: /maja-out/work)')
+        '--dst-work-root', default=pathlib.Path('/maja-work-root'),
+        type=to_path, help='Work root dir (default: /maja-work-root)')
     parser.add_argument(
-        '--dst-output', type=to_path, required=True, help='Output directory')
-    parser.add_argument(
-        '--tile', required=True, help='Tile name (e.g. 32UNG)')
-    parser.add_argument(
-        '--maja', type=to_path, help='Path to maja executable')
+        '--maja', type=to_path, help='Path to maja executable (default: read MAJA_BIN envvar)')
 
     args = parser.parse_args()
     kwargs = vars(args)
