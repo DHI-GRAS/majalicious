@@ -322,7 +322,7 @@ def runner(tile, **kwargs):
             line = proc.stdout.readline().rstrip()
             print(line)
         proc.communicate()
-        if proc.returncode != 1:
+        if proc.returncode != 0:
             raise RuntimeError(f'MAJA command {cmdstr} failed.')
 
 
