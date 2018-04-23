@@ -167,13 +167,13 @@ def _symlink_dir_contents(src_dir, dst_dir):
     """Create symlinks in dst_dir for all files in src_dir"""
     for src in src_dir.glob('*'):
         dst = dst_dir / src.name
-        src.sym_link_to(dst)
+        dst.symlink_to(src)
 
 
 def _symlink_into_dir(src_file, dst_dir):
     """Create a symlink for src_file in dst_dir"""
     dst_file = dst_dir / src_file.name
-    src_file.symlink_to(dst_file)
+    dst_file.symlink_to(src_file)
     return dst_file
 
 
@@ -221,11 +221,21 @@ def be_a_symlink_guy(
         number of products to process when running
         in backward mode
 
+    Notes
+    -----
+    The work directory must be contain images, all GIPPs files, the DTM, etc.).
+    The directory must be contain only one L1 product for the 'L2INIT' mode,
+    a list of L1 products for the 'L2BACKWARD' mode,
+    one L1 product and one L2 product for the 'L2NOMINAL' mode
+    and a list of L2 products for the L3 mode.
+
     Yields
     ------
     str
         command to execute MAJA
     """
+    tile = tile.upper()
+
     inputs_by_date = _find_inputs(src_input, tile)
     outputs_by_date = _find_outputs(dst_output, tile)
     if outputs_by_date:
@@ -243,7 +253,7 @@ def be_a_symlink_guy(
     dst_userconf = dst_work_root / 'userconf'
     if dst_userconf.exists():
         dst_userconf.unlink()
-    src_userconf.symlink_to(dst_userconf)
+    dst_userconf.symlink_to(src_userconf)
 
     for date, input_path in inputs_to_process.items():
 
@@ -272,40 +282,76 @@ def be_a_symlink_guy(
             mode = 'L2NOMINAL'
             _symlink_l2a(output_path, dst_work)
 
-        cmd = f'{maja} -i {dst_work} -o {dst_output} -m {mode} -ucs {dst_userconf} --TileId {tile}'
+        cmd = [
+            str(maja),
+            '-i', str(dst_work),
+            '-o', str(dst_output),
+            '-m', mode,
+            '-ucs', str(dst_userconf),
+            '--TileId', tile]
         yield cmd
 
         # update outputs
         outputs_by_date = _find_outputs(dst_output)
 
 
+def runner(tile, **kwargs):
+    """Create symlinks and run MAJA"""
+
+    kwargs.update(tile=tile)
+    for k in ['src_dtm']:
+        kwargs[k] = pathlib.Path(str(kwargs[k]).format(tile=tile))
+
+    import subprocess
+    for cmd in be_a_symlink_guy(**kwargs):
+        cmdstr = ' '.join(cmd)
+        print(f'Running MAJA command {cmdstr}')
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        line = True
+        while line:
+            line = proc.stdout.readline().rstrip()
+            print(line)
+
+
 if __name__ == '__main__':
+    import os
+    import argparse
     import pathlib
-    import click
 
-    class PathlibPath(click.ParamType):
-        name = 'path'
+    def to_path(value):
+        if value:
+            return pathlib.Path(value)
+        else:
+            return value
 
-        def convert(self, value, param, ctx):
-            if value:
-                return pathlib.Path(value)
-            else:
-                return value
+    parser = argparse.ArgumentParser(description='Create symlinks and run MAJA')
+    parser.add_argument(
+        '--src-input', type=to_path, required=True, help='dir containing L1C .SAFE')
+    parser.add_argument(
+        '--src-userconf', default=pathlib.Path('/maja-aux/userconf'),
+        type=to_path, help='userconf dir (default: /maja-aux/userconf)')
+    parser.add_argument(
+        '--src-gipp', default=pathlib.Path('/maja-aux/GIPP'),
+        type=to_path, help='GIPP dir (default: /maja-aux/GIPP)')
+    parser.add_argument(
+        '--src-dtm', default='/maja-aux/DTM/{tile}',
+        type=to_path, help='DTM dir (default: /maja-aux/DTM/{tile})')
+    parser.add_argument(
+        '--dst-work-root', default=pathlib.Path('/maja-out/work'),
+        type=to_path, help='Work root dir (default: /maja-out/work)')
+    parser.add_argument(
+        '--dst-output', type=to_path, required=True, help='Output directory')
+    parser.add_argument(
+        '--tile', required=True, help='Tile name (e.g. 32UNG)')
+    parser.add_argument(
+        '--maja', type=to_path, help='Path to maja executable')
 
-    @click.command()
-    @click.option(
-        '--src-input', type=PathlibPath(), required=True, help='dir containing L1C .SAFE')
-    @click.option('--src-userconf', type=PathlibPath(), required=True, help='userconf dir')
-    @click.option('--src-dtm', type=PathlibPath(), required=True, help='DTM dir')
-    @click.option('--src-gipp', type=PathlibPath(), required=True, help='GIPP dir')
-    @click.option('--dst-work-root', type=PathlibPath(), required=True, help='Work root dir')
-    @click.option('--dst-output', type=PathlibPath(), required=True, help='Output directory')
-    @click.option('--tile', required=True, help='Tile name (e.g. 32UNG)')
-    @click.option('--maja', type=PathlibPath(), required=True, help='Path to maja executable')
-    def cli(**kwargs):
-        """Create symlinks and run MAJA"""
-        import subprocess
-        for cmd in be_a_symlink_guy(**kwargs):
-            subprocess.run(cmd, check=True)
+    args = parser.parse_args()
+    kwargs = vars(args)
 
-    cli()
+    if kwargs['maja'] is None:
+        kwargs['maja'] = os.environ.get('MAJA_BIN', None)
+        if kwargs['maja'] is None:
+            raise RuntimeError('You need to either provide `--maja` or define envvar MAJA_BIN')
+
+    runner(**kwargs)
