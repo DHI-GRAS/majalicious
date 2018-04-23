@@ -1,4 +1,5 @@
 import re
+import warnings
 from collections import OrderedDict
 
 
@@ -11,7 +12,7 @@ def _find_granules(src_input, tile):
 
 
 def _maja_date_from_safe_name(safe_name):
-    """Get the date that MAJA uses to name its product from a .SAFE name"""
+    """Get the date-time that MAJA uses to name its product from a .SAFE name"""
     dateex = re.compile(r'\d{8}T\d{6}')
     if len(safe_name) < 70:
         # new format
@@ -25,6 +26,7 @@ def _maja_date_from_safe_name(safe_name):
 
 
 def _date_from_maja_output(name):
+    """Get the date-time string from a MAJA L2A product filename"""
     try:
         return re.search(r'\d{8}T\d{6}', name).group(0)
     except AttributeError:
@@ -50,7 +52,15 @@ def _remove_duplicate_date_entries(date_mapping):
 
 
 def _find_inputs(src_input, tile):
-    """
+    """Find Sentinel 2 L1C products in src_input for a given tile name
+
+    Parameters
+    ----------
+    src_input : pathlib.Path
+        source directory
+    tile : str
+        tile name e.g. 32UMG
+
     Returns
     -------
     OrderedDict
@@ -80,14 +90,14 @@ def _find_outputs(dst_output, tile):
     tile : str, format \d{2}{[A-Z]{4}}
         Sentinel 2 tile name
 
-
     Returns
     -------
     OrderedDict
         maps date to path
         L2A products sorted by date
     """
-    all_paths = _find_outputs(dst_output, tile=tile)
+    fnpattern = f'*{tile}*.DBL.DIR'
+    all_paths = dst_output.glob(fnpattern)
     pairs = []
     for path in all_paths:
         date = _date_from_maja_output(path.name)
@@ -125,8 +135,25 @@ def _get_most_recent_output(date, outputs_by_date):
 
 
 def _get_inputs_backward(date, inputs_by_date, num_inputs=8):
+    """Get L1C products after a reference date
+
+    Parameters
+    ----------
+    date : str
+        reference date
+    inputs_by_date : OrderedDict
+        mapping date to path
+        assumed to be ordered in ascending order by date
+    num_inputs : int
+        number of inputs to find
+
+    Returns
+    -------
+    OrderedDict
+        selected items from inputs_by_date
+    """
     pairs = []
-    for input_date, input_path in inputs_by_date:
+    for input_date, input_path in inputs_by_date.items():
         if input_date < date:
             continue
         if len(pairs) >= num_inputs:
@@ -135,25 +162,22 @@ def _get_inputs_backward(date, inputs_by_date, num_inputs=8):
     return OrderedDict(pairs)
 
 
-def _symlink_gipp(src_gipp, dst_work):
-    for src in src_gipp.glob('*'):
-        dst = dst_work / src.name
+def _symlink_dir_contents(src_dir, dst_dir):
+    """Create symlinks in dst_dir for all files in src_dir"""
+    for src in src_dir.glob('*'):
+        dst = dst_dir / src.name
         src.sym_link_to(dst)
 
 
-def _symlink_dem(path_dem, dst_work):
-    for src in path_dem.glob('*'):
-        dst = dst_work / src.name
-        src.sym_link_to(dst)
-
-
-def _symlink_in_dir(src_file, dst_dir):
+def _symlink_into_dir(src_file, dst_dir):
+    """Create a symlink for src_file in dst_dir"""
     dst_file = dst_dir / src_file.name
     src_file.symlink_to(dst_file)
     return dst_file
 
 
 def _symlink_l2a(src_dbldir, dst_dir):
+    """Create symlinks for a MAJA L2A product, including .HDR file"""
     if not src_dbldir.suffixes == ('.DBL', '.DIR'):
         raise ValueError(f'Expecting a .DBL.DIR file, got {src_dbldir}')
     dbl = src_dbldir.stem
@@ -161,13 +185,46 @@ def _symlink_l2a(src_dbldir, dst_dir):
     for path in [src_dbldir, dbl, hdr]:
         if not path.exists():
             raise RuntimeError(f'File not found: {path}')
-        _symlink_in_dir(path, dst_dir)
+        _symlink_into_dir(path, dst_dir)
 
 
-def generate_maja_commands(
+def be_a_symlink_guy(
         src_input, src_userconf, src_dtm, src_gipp,
         dst_work_root, dst_output, tile, maja,
         start_date=None, num_backward=8):
+    """Create all necessary symlinks in dst_work and yield MAJA commands to be run sequentially
+
+    Parameters
+    ----------
+    src_input : pathlib.Path
+        directory containing L1C input products (.SAFE)
+    src_userconf : pathlib.Path
+        directory containing config files
+    src_dtm : pathlib.Path
+        directory containing DTM files
+    src_gipp : pathlib.Path
+        directory containing GIPP files
+    dst_work_root : pathlib.Path
+        root directory where to create work folders
+        for products
+    dst_output : pathlib.Path
+        directory where to save L2A outputs to
+    tile : str
+        tile name (e.g. 32UNG)
+    maja : pathlib.Path
+        path to MAJA executable
+    start_date : str, optional
+        start processing from this date
+        format %Y%m%dT%H%M%S
+    num_backward : int
+        number of products to process when running
+        in backward mode
+
+    Yields
+    ------
+    str
+        command to execute MAJA
+    """
     inputs_by_date = _find_inputs(src_input, tile)
     outputs_by_date = _find_outputs(dst_output)
     if outputs_by_date:
@@ -192,8 +249,8 @@ def generate_maja_commands(
         dst_work = dst_work_root / f'work_{date}'
         dst_work.mkdir(exist_ok=False)
 
-        _symlink_dem(src_dtm, dst_work)
-        _symlink_gipp(src_gipp, dst_work)
+        _symlink_dir_contents(src_dtm, dst_work)
+        _symlink_dir_contents(src_gipp, dst_work)
 
         output = _get_most_recent_output(date, outputs_by_date)
         if output is None:
@@ -202,11 +259,11 @@ def generate_maja_commands(
             inputs_backward = _get_inputs_backward(date, inputs_by_date, num_backward)
             num_backward_found = len(inputs_backward)
             if num_backward_found < num_backward:
-                print(
+                warnings.warn(
                     f'Did not find {num_backward} input products for '
                     f'backward processing but only {num_backward_found}.')
             for input_path in inputs_backward.values():
-                _symlink_in_dir(input_path, dst_work)
+                _symlink_into_dir(input_path, dst_work)
         else:
             output_date, output_path = next(iter(output.items()))
             print(f'Most recent L2A product date is {output_date}')
