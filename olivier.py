@@ -227,7 +227,7 @@ def be_a_symlink_guy(
         command to execute MAJA
     """
     inputs_by_date = _find_inputs(src_input, tile)
-    outputs_by_date = _find_outputs(dst_output)
+    outputs_by_date = _find_outputs(dst_output, tile)
     if outputs_by_date:
         inputs_to_process = {d: path for d, path in inputs_by_date if d not in outputs_by_date}
     else:
@@ -277,3 +277,34 @@ def be_a_symlink_guy(
 
         # update outputs
         outputs_by_date = _find_outputs(dst_output)
+
+
+if __name__ == '__main__':
+    import pathlib
+    import click
+
+    class PathlibPath(click.ParamType):
+        name = 'path'
+
+        def convert(self, value, param, ctx):
+            if value:
+                return pathlib.Path(value)
+            else:
+                return value
+
+    @click.command()
+    @click.option('--src-dir', type=PathlibPath(), required=True, help='dir containing L1C .SAFE')
+    @click.option('--src-userconf', type=PathlibPath(), required=True, help='userconf dir')
+    @click.option('--src-dtm', type=PathlibPath(), required=True, help='DTM dir')
+    @click.option('--src-gipp', type=PathlibPath(), required=True, help='GIPP dir')
+    @click.option('--dst-work-root', type=PathlibPath(), required=True, help='Work root dir')
+    @click.option('--dst-output', type=PathlibPath(), required=True, help='Output directory')
+    @click.option('--tile', required=True, help='Tile name (e.g. 32UNG)')
+    @click.option('--maja', type=PathlibPath(), required=True, help='Path to maja executable')
+    def cli(**kwargs):
+        """Create symlinks and run MAJA"""
+        import subprocess
+        for cmd in be_a_symlink_guy(**kwargs):
+            subprocess.run(cmd, check=True)
+
+    cli()
