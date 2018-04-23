@@ -1,4 +1,4 @@
-# maja-symlink-guy
+# majalicious
 
 Run MAJA on Sentinel 2 data by creating a lot of symlinks
 
