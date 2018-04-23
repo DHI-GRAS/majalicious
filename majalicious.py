@@ -295,7 +295,7 @@ def be_a_symlink_guy(
         yield cmd
 
         # update outputs
-        outputs_by_date = _find_outputs(dst_output)
+        outputs_by_date = _find_outputs(dst_output, tile)
 
 
 def runner(tile, **kwargs):
