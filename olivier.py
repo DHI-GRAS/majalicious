@@ -293,7 +293,8 @@ if __name__ == '__main__':
                 return value
 
     @click.command()
-    @click.option('--src-dir', type=PathlibPath(), required=True, help='dir containing L1C .SAFE')
+    @click.option(
+        '--src-input', type=PathlibPath(), required=True, help='dir containing L1C .SAFE')
     @click.option('--src-userconf', type=PathlibPath(), required=True, help='userconf dir')
     @click.option('--src-dtm', type=PathlibPath(), required=True, help='DTM dir')
     @click.option('--src-gipp', type=PathlibPath(), required=True, help='GIPP dir')
