@@ -101,7 +101,7 @@ def _find_outputs(dst_output, tile):
         maps date to path
         L2A products sorted by date
     """
-    fnpattern = f'*SSC*{tile}*.DBL.DIR'
+    fnpattern = f'*SSC_L2VALD*{tile}*.DBL.DIR'
     all_paths = dst_output.glob(fnpattern)
     pairs = []
     for path in all_paths:
