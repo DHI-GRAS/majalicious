@@ -13,6 +13,8 @@ This way, you e.g. always have the most recent L2A product for the current L1C p
 you are processing and you do not need to move any files around when starting to process
 a new scene.
 
+Don't worry, it's not malicious. It's majalicious!
+
 
 ## Building
 
