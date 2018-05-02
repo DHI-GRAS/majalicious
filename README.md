@@ -24,8 +24,8 @@ docker build -t maja
 
 To see the full interface, run
 
-```
-bash docker run maja
+```bash
+docker run maja
 ```
 
 For an actual run, you need to mount the input and auxillary data 
