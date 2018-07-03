@@ -226,8 +226,8 @@ def be_a_symlink_guy(
 
     Notes
     -----
-    The work directory must be contain images, all GIPPs files, the DTM, etc.).
-    The directory must be contain only one L1 product for the 'L2INIT' mode,
+    The work directory must contain images, all GIPPs files, the DTM, etc.
+    The work directory must contain only one L1 product for the 'L2INIT' mode,
     a list of L1 products for the 'L2BACKWARD' mode,
     one L1 product and one L2 product for the 'L2NOMINAL' mode
     and a list of L2 products for the L3 mode.
