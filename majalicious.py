@@ -195,7 +195,7 @@ def _symlink_l2a(src_dbldir, dst_dir):
 def be_a_symlink_guy(
         src_input, src_userconf, src_dtm, src_gipp,
         dst_work_root, dst_output, tile, maja,
-        start_date=None, num_backward=8):
+        start_date=None, end_date=None, num_backward=8):
     """Create all necessary symlinks in dst_work and yield MAJA commands to be run sequentially
 
     Parameters
@@ -217,8 +217,8 @@ def be_a_symlink_guy(
         tile name (e.g. 32UNG)
     maja : pathlib.Path
         path to MAJA executable
-    start_date : str, optional
-        start processing from this date
+    start_date, end_date : str, optional
+        process products with acquisition dates in this range
         format %Y%m%dT%H%M%S
     num_backward : int
         number of products to process when running
@@ -247,9 +247,11 @@ def be_a_symlink_guy(
     else:
         inputs_to_process = inputs_by_date
 
-    if start_date is not None:
+    if start_date is not None or end_date is not None:
+        ds = start_date or '0'
+        de = end_date or '9'
         inputs_to_process = {
-            d: path for d, path in inputs_to_process.items() if d >= start_date}
+            d: path for d, path in inputs_to_process.items() if (ds >= d >= de)}
 
     minusp = dict(parents=True, exist_ok=True)
     dst_output.mkdir(**minusp)
@@ -356,6 +358,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dst-work-root', default=pathlib.Path('/maja-work-root'),
         type=to_path, help='Work root dir (default: /maja-work-root)')
+    parser.add_argument(
+        '--start-date', default=None,
+        help='Process images from this acquisition date onward (format %Y%m%dT%H%M%S)')
+    parser.add_argument(
+        '--end-date', default=None,
+        help='Process images until this acquisition date (format %Y%m%dT%H%M%S)')
     parser.add_argument(
         '--maja', type=to_path, help='Path to maja executable (default: read MAJA_BIN envvar)')
 
