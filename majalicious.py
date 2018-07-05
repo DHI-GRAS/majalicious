@@ -253,6 +253,10 @@ def be_a_symlink_guy(
         inputs_to_process = {
             d: path for d, path in inputs_to_process.items() if (ds >= d >= de)}
 
+    if not inputs_to_process:
+        print('No new input data to process.')
+        return
+
     minusp = dict(parents=True, exist_ok=True)
     dst_output.mkdir(**minusp)
     dst_work_root.mkdir(**minusp)
