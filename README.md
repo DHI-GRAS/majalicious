@@ -1,11 +1,11 @@
 # majalicious
 
-Run MAJA on Sentinel 2 data by creating a lot of symlinks
+Run MAJA V1 on Sentinel 2 data by creating a lot of symlinks
 
 
 ## Purpose
 
-This little script automates the processing of Sentinel 2 timeseries with MAJA.
+This little script automates the processing of Sentinel 2 timeseries with MAJA V1.
 It indexes by date all L1C and MAJA-produced L2A products in the folders you provide
 and creates symlinks to the ones MAJA needs to run in L2NOMINAL or L2BACKWARD mode.
 
@@ -54,3 +54,9 @@ A full example command is the following:
 ```bash
 docker run -v /my/maja/aux:/maja-aux -v /my/maja/data:/maja-data maja --src-input /maja-data/input --dst-output /maja-data/output --tile 32UNG
 ```
+
+## Docs
+
+This script is a re-implementation of the recipes at https://github.com/olivierhagolle/Start_maja
+
+Please consult that repo for more information on why things are done this way.
