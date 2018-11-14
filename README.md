@@ -2,6 +2,10 @@
 
 Run MAJA V1 on Sentinel 2 data by creating a lot of symlinks
 
+## Dead
+
+NB: MAJA V1 does not work for data past 6 November 2018, where [Copernicus changed L1C format](https://scihub.copernicus.eu/news/News00409). :boom:
+
 
 ## Purpose
 
